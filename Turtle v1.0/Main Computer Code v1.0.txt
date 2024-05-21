@@ -1,0 +1,51 @@
+--Main Computer Code
+
+local modem = peripheral.find("modem")
+modem.open(1) -- Ensure modem is open on the correct channel
+
+local turtleData = {}
+
+-- Load data from floppy disk
+function loadData()
+    if fs.exists("disk/turtleData") then
+        local file = fs.open("disk/turtleData", "r")
+        turtleData = textutils.unserialize(file.readAll())
+        file.close()
+    end
+end
+
+-- Save data to floppy disk
+function saveData()
+    local file = fs.open("disk/turtleData", "w")
+    file.write(textutils.serialize(turtleData))
+    file.close()
+end
+
+-- Function to handle received messages
+function handleMessage(message)
+    if type(message) == "string" then
+        local name = message
+        if turtleData[name] then
+            modem.transmit(1, 1, turtleData[name])
+        else
+            turtleData[name] = 0
+            saveData()
+            modem.transmit(1, 1, 0)
+        end
+    elseif type(message) == "table" and #message == 2 then
+        local name, level = message[1], message[2]
+        if name and level then
+            turtleData[name] = level
+            saveData()
+        end
+    end
+end
+
+-- Main loop
+loadData()
+while true do
+    local event, side, channel, replyChannel, message, distance = os.pullEvent("modem_message")
+    if channel == 1 then
+        handleMessage(message)
+    end
+end

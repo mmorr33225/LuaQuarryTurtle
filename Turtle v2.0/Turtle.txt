@@ -1,0 +1,239 @@
+-- Turtle Code v2.0
+local finishedLevel = 0
+local homeX, homeY, homeZ = -111, 76, 316 -- Set these values as required
+local currentX, currentY, currentZ = 0, 0, 0
+local digLength = 5 -- Set this value as required
+local digWidth = 5 -- Set this value as required
+local endY = 10 -- Set this value as required
+local trashList = {"dirt", "cobblestone"} -- Add items to blacklist here
+local dir = 0 -- 0 = north, 1 = east, 2 = south, 3 = west
+
+-- DONT FORGET TO NAME TURTLE AND PUT DOWN GPS
+-- GPS:
+-- shell.run("gps", "host", 59, 5, -150)
+-- Name turtle:
+-- label set Bob
+
+-- Function to send request to start digging
+function requestStart()
+    local modem = peripheral.find("modem")
+    modem.open(1) -- Ensure modem is open on the correct channel
+    while true do
+        modem.transmit(1, 1, os.getComputerLabel()) -- Send turtle name
+        local event, side, channel, replyChannel, message, distance = os.pullEvent("modem_message")
+        if event == "modem_message" and channel == 1 and type(message) == "number" then
+            finishedLevel = message
+            startDig(finishedLevel)
+            break
+        end
+    end
+end
+
+-- Function to turn right
+function right()
+    turtle.turnRight()
+    dir = (dir + 1) % 4
+end
+
+-- Function to turn left
+function left()
+    turtle.turnLeft()
+    dir = (dir - 1) % 4
+end
+
+-- Function to move in specific direction
+function digMoveDir(direction)
+    while(dir ~= direction) do
+        right()
+    end
+    digMoveForward(1)
+end
+
+function findDir()
+    currentX, currentY, currentZ = gps.locate()
+    newX = currentX
+    newY = currentY
+    newZ = currentZ
+    turtle.forward()
+    newX, newY, newZ = gps.locate()
+    while currentX == newX and currentZ == newZ do
+        right()
+        turtle.forward()
+        newX, newY, newZ = gps.locate()
+    end
+    if newZ < currentZ then
+        dir = 0
+    elseif newX > currentX then
+        dir = 1
+    elseif newZ > currentZ then
+        dir = 2
+    else
+        dir = 3
+    end
+end
+
+-- Function to return home
+function returnHome()
+    currentX, currentY, currentZ = gps.locate()
+    while currentX ~= homeX do
+        if currentX > homeX then
+            digMoveDir(3)
+            currentX = currentX - 1
+        else
+            digMoveDir(1)
+            currentX = currentX + 1
+        end
+    end
+    while currentZ ~= homeZ do
+        if currentZ > homeZ then
+            digMoveDir(0)
+            currentZ = currentZ - 1
+        else
+            digMoveDir(2)
+            currentZ = currentZ + 1
+        end
+    end
+    while currentY ~= homeY do
+        if currentY > homeY then
+            digMoveDown(1)
+            currentY = currentY - 1
+        else
+            digMoveUp(1)
+            currentY = currentY + 1
+        end
+    end
+
+    -- Finding the chest
+    for i = 1, 4 do
+        if turtle.inspect() then
+            local success, data = turtle.inspect()
+            if success and data.name == "minecraft:chest" then
+                break
+            end
+        end
+        right()
+    end
+end
+
+-- Function to check and drop items in the trash list
+function checkDropItems()
+    for i = 1, 15 do
+        local item = turtle.getItemDetail(i)
+        if item and contains(trashList, item.name) then
+            turtle.select(i)
+            turtle.drop()
+        end
+    end
+    if turtle.getItemCount(16) > 0 then
+        depositInventory()
+    end
+end
+
+-- Function to deposit inventory
+function depositInventory()
+    returnHome()
+    for i = 1, 15 do
+        turtle.select(i)
+        turtle.drop()
+    end
+    turnFromChest()
+    startDig(finishedLevel)
+end
+
+-- Function to report progress
+function reportProgress()
+    finishedLevel = finishedLevel + 1
+    local modem = peripheral.find("modem")
+    modem.transmit(1, 1, {os.getComputerLabel(), finishedLevel})
+end
+
+-- Function to dig and move up
+function digMoveUp(x)
+    for i = 1, x do
+        turtle.digUp()
+        turtle.up()
+    end
+end
+
+-- Function to dig and move down
+function digMoveDown(x)
+    for i = 1, x do
+        turtle.digDown()
+        turtle.down()
+    end
+end
+
+-- Function to dig and move forward
+function digMoveForward(x)
+    for i = 1, x do
+        turtle.dig()
+        turtle.forward()
+    end
+end
+
+-- Function to dig a rectangle
+function digRect()
+    for i = 1, digWidth do
+        digMoveForward(digLength - 1)
+        if i < digWidth then
+            if i % 2 == 1 then
+                right()
+                digMoveForward(1)
+                right()
+            else
+                left()
+                digMoveForward(1)
+                left()
+            end
+        end
+    end
+end
+
+-- Function to turn the turtle away from chest
+function turnFromChest()
+    right()
+    right()
+end
+
+-- Function to refuel the turtle
+function refuel()
+    if turtle.getFuelLevel() < turtle.getFuelLimit() / 2 then
+        turtle.select(16)
+        if turtle.refuel() then
+            print("Refueled")
+        else
+            print("No fuel in slot 16")
+        end
+    end
+end
+
+-- Function to start digging
+function startDig(startY)
+    refuel()
+    findDir()
+    returnHome()
+    turnFromChest()
+    digMoveDown(finishedLevel)
+    digRect()
+    checkDropItems()
+    reportProgress()
+    if endY >= finishedLevel then
+        depositInventory()
+    else
+        returnHome()
+        print("All Done!")
+    end
+end
+
+-- Helper function to check if table contains an element
+function contains(table, element)
+    for _, value in pairs(table) do
+        if value == element then
+            return true
+        end
+    end
+    return false
+end
+
+-- Main code
+requestStart()

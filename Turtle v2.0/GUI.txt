@@ -1,0 +1,151 @@
+-- Turtle GUI Code v2.3 (Made for 4x6 Advanced Monitors)
+-- Constants
+local NUM_TURTLES = 6
+local MAX_FUEL = 20000
+
+-- Color constants
+local TURTLES_COLOR = colors.green
+local TURTLE_PICTURE_COLORS = {
+    d = colors.blue,
+    f = colors.lightGray,
+    j = colors.yellow
+}
+local PROGRESS_COLOR = colors.lime
+local FUEL_COLOR_HIGH = colors.green
+local FUEL_COLOR_MEDIUM = colors.yellow
+local FUEL_COLOR_LOW = colors.red
+local BAR_BACKGROUND_COLOR = colors.lightGray
+local BACKGROUND_COLOR = colors.black
+
+-- Turtle and title images
+local turtlesImage = {
+    "      00000  0   0  0000  00000  0      00000  00000",
+    "        0    0   0  0   0   0    0      0      0",
+    "        0    0   0  0000    0    0      000    00000",
+    "        0    0   0  0   0   0    0      0          0",
+    "        0     000   0   0   0    00000  00000  00000"
+}
+
+local turtlePicture = {
+    "ddddddddd",
+    "dfffffffd",
+    "ddddddddd",
+    "djjjjjjjd",
+    "djjjjjjjd",
+    "ddddddddd"
+}
+
+-- Load the turtle data from the floppy disk
+local turtleData = {}
+
+function loadData()
+    if fs.exists("disk/turtleData") then
+        local file = fs.open("disk/turtleData", "r")
+        local data = file.readAll()
+        turtleData = textutils.unserialize(data)
+        file.close()
+    end
+end
+
+-- Function to display a colored image
+local function displayImage(image, x, y, colorMap)
+    for i = 1, #image do
+        for j = 1, #image[i] do
+            local pixel = image[i]:sub(j, j)
+            local color = colorMap[pixel] or BACKGROUND_COLOR
+            paintutils.drawPixel(x + j - 1, y + i - 1, color)
+        end
+    end
+end
+
+-- Function to draw a colored progress bar with background
+local function drawProgressBar(x, y, width, progress, color)
+    for i = 1, width do
+        paintutils.drawPixel(x + i - 1, y, BAR_BACKGROUND_COLOR)
+    end
+    local barWidth = math.floor(width * progress)
+    for i = 1, barWidth do
+        paintutils.drawPixel(x + i - 1, y, color)
+    end
+end
+
+-- Function to draw a fuel bar with background
+local function drawFuelBar(x, y, width, progress, color)
+    for i = 1, width do
+        paintutils.drawPixel(x + i - 1, y, BAR_BACKGROUND_COLOR)
+    end
+    local barWidth = math.floor(width * progress)
+    for i = 1, barWidth do
+        paintutils.drawPixel(x + i - 1, y, color)
+    end
+end
+
+-- Function to display turtle info
+local function displayTurtleInfo(turtle, x, y)
+    -- Display turtle image
+    displayImage(turtlePicture, x + 1, y, TURTLE_PICTURE_COLORS)
+
+    -- Display turtle name
+    term.setCursorPos(x + 12, y)
+    term.setTextColor(colors.white)
+    term.setBackgroundColor(BACKGROUND_COLOR)
+    term.write("Name: " .. (turtle.name or "N/A"))
+
+    -- Calculate and display progress bar for mining
+    local totalLevels = turtle.startY - turtle.endY
+    local progress = turtle.finishedLevel / totalLevels
+    term.setCursorPos(x + 12, y + 2)
+    term.write("Progress:")
+    drawProgressBar(x + 12, y + 3, 16, progress, PROGRESS_COLOR)
+
+    -- Determine fuel bar color based on fuel level
+    local fuelLevel = turtle.fuelLevel / MAX_FUEL
+    local fuelColor = FUEL_COLOR_HIGH
+    if fuelLevel < 0.15 then
+        fuelColor = FUEL_COLOR_LOW
+    elseif fuelLevel < 0.5 then
+        fuelColor = FUEL_COLOR_MEDIUM
+    end
+
+    -- Display fuel bar
+    term.setCursorPos(x + 12, y + 5)
+    term.setTextColor(colors.white)
+    term.setBackgroundColor(BACKGROUND_COLOR)
+    term.write("Fuel:")
+    drawFuelBar(x + 12, y + 6, 16, fuelLevel, fuelColor)
+end
+
+-- Function to display the main GUI
+local function displayGUI()
+    term.setBackgroundColor(BACKGROUND_COLOR)
+    term.clear()
+    term.setCursorPos(1, 1)
+    displayImage(turtlesImage, 1, 1, {["0"] = TURTLES_COLOR, [" "] = BACKGROUND_COLOR})
+
+    loadData()
+
+    local row = 0
+    for name, turtle in pairs(turtleData) do
+        if row < NUM_TURTLES then
+            local x = (row % 2 == 0) and 2 or 31
+            local y = math.floor(row / 2) * 10 + 7
+            if turtle then
+                displayTurtleInfo(turtle, x, y)
+                row = row + 1
+            end
+        end
+    end
+end
+
+-- Main loop
+while true do
+    local monitors = {peripheral.find("monitor")}
+    local originalTerm = term.current()
+
+    for _, monitor in ipairs(monitors) do
+        term.redirect(monitor)
+        displayGUI()
+        term.redirect(originalTerm)
+    end
+    os.sleep(5) -- Refresh every 5 seconds
+end

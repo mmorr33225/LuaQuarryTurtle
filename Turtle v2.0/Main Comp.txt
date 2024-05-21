@@ -1,0 +1,141 @@
+-- Main Computer Code v2.3
+
+
+
+local modem = peripheral.find("modem")
+
+modem.open(1) -- Ensure modem is open on the correct channel
+
+
+
+local turtleData = {}
+
+
+
+-- Load data from floppy disk
+
+function loadData()
+
+    if fs.exists("disk/turtleData") then
+
+        local file = fs.open("disk/turtleData", "r")
+
+        turtleData = textutils.unserialize(file.readAll())
+
+        file.close()
+
+    end
+
+end
+
+
+
+-- Save data to floppy disk
+
+function saveData()
+
+    local file = fs.open("disk/turtleData", "w")
+
+    file.write(textutils.serialize(turtleData))
+
+    file.close()
+
+end
+
+
+
+-- Function to handle received messages
+
+function handleMessage(message)
+
+    if type(message) == "table" then
+
+        local name = message[1]
+
+        local startY = message[2]
+
+        local endY = message[3]
+
+        local fuelLevel = message[4]
+
+        if turtleData[name] then
+
+            turtleData[name].startY = startY or turtleData[name].startY
+
+            turtleData[name].endY = endY or turtleData[name].endY
+
+            turtleData[name].fuelLevel = fuelLevel or turtleData[name].fuelLevel
+
+            modem.transmit(1, 1, turtleData[name])
+
+        else
+
+            -- Assign an index to the new turtle
+
+            local index = 1
+
+            for k, v in pairs(turtleData) do
+
+                index = index + 1
+
+            end
+
+            turtleData[name] = {
+
+                name = name,
+
+                index = index,
+
+                startY = startY or 0,
+
+                endY = endY or 0,
+
+                fuelLevel = fuelLevel or 0,
+
+                finishedLevel = 0
+
+            }
+
+            saveData()
+
+            modem.transmit(1, 1, turtleData[name])
+
+        end
+
+    elseif type(message) == "table" and #message == 4 then
+
+        local name, finishedLevel, endY, fuelLevel = message[1], message[2], message[3], message[4]
+
+        if name and finishedLevel then
+
+            turtleData[name].finishedLevel = finishedLevel
+
+            turtleData[name].endY = endY or turtleData[name].endY
+
+            turtleData[name].fuelLevel = fuelLevel or turtleData[name].fuelLevel
+
+            saveData()
+
+        end
+
+    end
+
+end
+
+
+
+-- Main loop
+
+loadData()
+
+while true do
+
+    local event, side, channel, replyChannel, message, distance = os.pullEvent("modem_message")
+
+    if channel == 1 then
+
+        handleMessage(message)
+
+    end
+
+end
